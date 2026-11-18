@@ -140,6 +140,12 @@ textarea { min-height: 88px; resize: vertical; }
 .docbar summary { cursor: pointer; font-size: 0.84rem; color: var(--muted); }
 .relink { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .relink input { flex: 1 1 220px; }
+.guide { background: var(--field); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 10px 0 14px; font-size: 0.88rem; }
+.guide-title { font-weight: 600; margin: 0 0 6px; }
+.guide ol { margin: 0; padding-left: 20px; }
+.guide li { margin-bottom: 6px; }
+.guide li:last-child { margin-bottom: 0; }
+.guide .btn { margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -214,14 +220,26 @@ textarea { min-height: 88px; resize: vertical; }
         </div>
         <details id="setup">
           <summary>Connection settings</summary>
-          <div class="f" style="margin-top:10px"><label for="scriptUrl">Sync script URL</label>
+          <div class="guide">
+            <p class="guide-title">Set up your own Google Doc output (about 10 minutes, once)</p>
+            <ol>
+              <li>Create a Google Doc for your project log. Typing <b>docs.new</b> in the address bar makes one.</li>
+              <li>In that doc, open <b>Extensions → Apps Script</b>, delete the sample code, and paste the sync script.<br>
+                <button type="button" class="btn ghost small" id="copyScript">Copy sync script</button></li>
+              <li>Click the Save icon, choose <b>setup</b> in the function menu, and click <b>Run</b>. Approve the permissions with your Google account. If Google says the app isn’t verified, click <b>Advanced</b>, then <b>Go to</b> your project; it’s your own script.</li>
+              <li>In the Execution log, copy the key after “Your sync key:”.</li>
+              <li>Click <b>Deploy → New deployment</b>, click the gear and choose <b>Web app</b>. Set “Execute as” to <b>Me</b> and “Who has access” to <b>Anyone</b>, click <b>Deploy</b>, approve again if asked, and copy the Web app URL.</li>
+              <li>Paste the URL and key below and click <b>Save settings</b>.</li>
+            </ol>
+          </div>
+          <div class="f"><label for="scriptUrl">Sync script URL</label>
             <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/…/exec"></div>
           <div class="f"><label for="syncKey">Sync key</label>
             <input type="text" id="syncKey" placeholder="The key shown when you ran setup" autocomplete="off"></div>
-          <div class="f"><label for="docUrlInput">Google Doc link</label>
+          <div class="f"><label for="docUrlInput">Google Doc link (optional)</label>
             <input type="text" id="docUrlInput" placeholder="https://docs.google.com/document/d/…"></div>
           <button type="button" class="btn small" id="saveConn">Save settings</button>
-          <div class="hint">These are stored only in this browser. Syncing replaces the doc’s contents with your project list.</div>
+          <div class="hint">Your settings and projects are stored only in this browser, so each person who uses this page has their own. Syncing replaces the doc’s contents with your project list, so use a doc made for this.</div>
         </details>
       </div>
       <div id="notice"></div>
@@ -631,7 +649,7 @@ function scheduleSync() {
 function syncErrorText(e) {
   switch (e && e.code) {
     case "bad_key": return "The sync key doesn’t match the one in your script. Check it in Connection settings.";
-    case "no_doc": return "The script couldn’t open the Google Doc. Check DOC_ID in the script and that you can edit the doc.";
+    case "no_doc": return "The sync script isn’t linked to a doc yet. In your doc, open Extensions → Apps Script and run setup.";
     case "network": return "Couldn’t reach the sync script. Check the URL, and that the script is deployed as a web app with access set to Anyone.";
     default: return "The sync didn’t finish" + (e && e.message ? ": " + e.message : "") + ". Click Sync now to try again.";
   }
@@ -722,6 +740,105 @@ $("saveConn").addEventListener("click", () => {
   saveSettings({ scriptUrl: url, syncKey: key, ...(m ? { googleDocId: m[1] } : {}) });
   $("setup").open = false;
   if (url && key) syncDoc();
+});
+
+/* ---------- Sync script for new users ---------- */
+const SYNC_SCRIPT = `/**
+ * Project Organizer: Google Doc sync
+ * Paste this into Extensions → Apps Script inside the Google Doc that should
+ * receive your projects. No edits are needed.
+ */
+
+/** Run this once from the Apps Script editor. It links this doc and shows your sync key in the log. */
+function setup() {
+  const doc = DocumentApp.getActiveDocument();
+  if (!doc) throw new Error('Open Apps Script from your Google Doc (Extensions → Apps Script) and run setup there.');
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('DOC_ID', doc.getId());
+  const key = Utilities.getUuid();
+  props.setProperty('SYNC_KEY', key);
+  Logger.log('Your sync key: ' + key);
+}
+
+/** Opening the web app URL in a browser shows this, so you can check it's live. */
+function doGet() {
+  return ContentService.createTextOutput('Project Organizer sync is running.');
+}
+
+function doPost(e) {
+  try {
+    const req = JSON.parse(e.postData.contents);
+    const props = PropertiesService.getScriptProperties();
+    const key = props.getProperty('SYNC_KEY');
+    if (!key || req.key !== key) return reply({ ok: false, error: 'bad_key' });
+
+    const docId = props.getProperty('DOC_ID');
+    let doc;
+    try { doc = DocumentApp.openById(docId); } catch (err) { return reply({ ok: false, error: 'no_doc' }); }
+
+    writeDoc(doc.getBody(), req.paragraphs || []);
+    doc.saveAndClose();
+    return reply({ ok: true, title: doc.getName(), docId: docId });
+  } catch (err) {
+    return reply({ ok: false, error: 'script_error', message: String(err.message || err) });
+  }
+}
+
+function writeDoc(body, paras) {
+  const HEADINGS = {
+    HEADING_1: DocumentApp.ParagraphHeading.HEADING1,
+    HEADING_2: DocumentApp.ParagraphHeading.HEADING2,
+    HEADING_3: DocumentApp.ParagraphHeading.HEADING3,
+    NORMAL_TEXT: DocumentApp.ParagraphHeading.NORMAL
+  };
+  body.clear();
+  const first = body.getChild(0); // clear() leaves one empty paragraph
+
+  paras.forEach((p, i) => {
+    const text = String(p.text || '-');
+    let el;
+    if (p.bullet) {
+      el = body.appendListItem(text);
+      el.setGlyphType(DocumentApp.GlyphType.BULLET);
+    } else {
+      el = body.appendParagraph(text);
+      el.setHeading(HEADINGS[p.style] || DocumentApp.ParagraphHeading.NORMAL);
+    }
+
+    const t = el.editAsText();
+    if (p.style === 'NORMAL_TEXT' || p.bullet) {
+      t.setBold(false).setItalic(false);
+      (p.bold || []).forEach(r => {
+        if (r[1] > r[0]) t.setBold(r[0], Math.min(r[1], text.length) - 1, true);
+      });
+      if (p.muted) t.setItalic(true).setForegroundColor('#666666');
+      const next = paras[i + 1];
+      const endOfBlock = p.space || p.muted || (p.bullet && !(next && next.bullet));
+      el.setSpacingAfter(endOfBlock ? 10 : 3);
+    }
+  });
+
+  // Remove the empty paragraph left by clear()
+  if (body.getNumChildren() > 1) first.removeFromParent();
+}
+
+function reply(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+`;
+$("copyScript").addEventListener("click", async () => {
+  const btn = $("copyScript");
+  let ok = false;
+  try { await navigator.clipboard.writeText(SYNC_SCRIPT); ok = true; } catch {}
+  if (!ok) {
+    const ta = document.createElement("textarea");
+    ta.value = SYNC_SCRIPT; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { ok = document.execCommand("copy"); } catch {}
+    ta.remove();
+  }
+  btn.textContent = ok ? "Copied. Paste it into Apps Script" : "Couldn’t copy. Try again";
+  setTimeout(() => { btn.textContent = "Copy sync script"; }, 4000);
 });
 
 /* ---------- Export / import ---------- */
