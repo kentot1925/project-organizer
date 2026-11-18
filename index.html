@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Project Organizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --page: #EEF0F7; --card: #FFFFFF; --ink: #1E2A5A; --muted: #5C6485; --line: #D6DAE8;
+  --field: #F7F8FC; --accent: #0E8A6A; --accent-soft: #DDF3EC; --accent-ink: #0A5C47;
+  --warn: #B4600A; --warn-soft: #FBEBD6; --danger: #B3362B;
+  --s-new: #E3E6F2; --s-prog: #DCE8FD; --s-hold: #FBEBD6; --s-done: #DDF3EC;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #10152B; --card: #1A2140; --ink: #E6E9F7; --muted: #A2A9C9; --line: #2E3762;
+    --field: #141A35; --accent: #3CC49E; --accent-soft: #143A31; --accent-ink: #8BE6CC;
+    --warn: #F0A24B; --warn-soft: #3A2A14; --danger: #F07A6E;
+    --s-new: #262E52; --s-prog: #1E3361; --s-hold: #3A2A14; --s-done: #143A31; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #10152B; --card: #1A2140; --ink: #E6E9F7; --muted: #A2A9C9; --line: #2E3762;
+  --field: #141A35; --accent: #3CC49E; --accent-soft: #143A31; --accent-ink: #8BE6CC;
+  --warn: #F0A24B; --warn-soft: #3A2A14; --danger: #F07A6E;
+  --s-new: #262E52; --s-prog: #1E3361; --s-hold: #3A2A14; --s-done: #143A31; color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+body { margin: 0; background: var(--page); color: var(--ink);
+  font: 15px/1.5 "Instrument Sans", "Segoe UI", system-ui, sans-serif; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 32px 20px 64px; }
+header { margin-bottom: 28px; }
+h1 { font-size: clamp(1.9rem, 4vw, 2.6rem); line-height: 1.05; margin: 0 0 6px; letter-spacing: -0.02em; font-weight: 700; }
+.sub { color: var(--muted); margin: 0; }
+.grid { display: grid; grid-template-columns: 400px 1fr; gap: 28px; align-items: start; }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+/* Form */
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+@media (min-width: 901px) { .panel { position: sticky; top: calc(16px + env(safe-area-inset-top, 0px)); } }
+.panel h2 { font-size: 1.15rem; margin: 0 0 16px; }
+.f { margin-bottom: 14px; }
+.f label, .lbl { display: block; font-weight: 600; font-size: 0.86rem; margin-bottom: 5px; }
+input[type=text], input[type=date], input[type=search], textarea, select {
+  width: 100%; font: inherit; color: var(--ink); background: var(--field);
+  border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; }
+textarea { min-height: 88px; resize: vertical; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; font-size: 0.84rem;
+  background: var(--s-prog); color: var(--ink); border-radius: 999px; padding: 3px 4px 3px 11px; }
+.chip button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 1rem; line-height: 1;
+  width: 22px; height: 22px; border-radius: 50%; }
+.chip button:hover { background: var(--line); color: var(--ink); }
+.tool-box { border: 1px solid var(--line); background: var(--field); border-radius: 8px; padding: 7px; position: relative; }
+.tool-box .chips { margin-bottom: 6px; }
+.tool-box .chips:empty { margin: 0; }
+.tool-box input { border: 0; background: transparent; padding: 4px; }
+.tool-box input:focus-visible { outline: none; }
+.tool-box:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+.ac { position: absolute; left: 0; right: 0; top: calc(100% + 4px); background: var(--card); border: 1px solid var(--line);
+  border-radius: 8px; margin: 0; padding: 4px; list-style: none; z-index: 5; max-height: 220px; overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(20, 28, 60, 0.18); }
+.ac li { padding: 7px 10px; border-radius: 6px; cursor: pointer; }
+.ac li[aria-selected="true"], .ac li:hover { background: var(--accent-soft); }
+.hint { font-size: 0.8rem; color: var(--muted); margin-top: 5px; }
+
+.suggest { border: 1px dashed var(--accent); background: var(--accent-soft); border-radius: 10px; padding: 12px; margin-bottom: 16px; }
+.suggest-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+.suggest-head strong { font-size: 0.88rem; color: var(--accent-ink); }
+.sg { border: 1px solid var(--accent); background: var(--card); color: var(--accent-ink); border-radius: 999px;
+  padding: 4px 11px; font: 500 0.84rem inherit; font-family: inherit; cursor: pointer; }
+.sg:hover { background: var(--accent); color: var(--card); }
+.why { font-size: 0.8rem; color: var(--muted); margin: 8px 0 0; padding-left: 16px; }
+.why li { margin-bottom: 2px; }
+
+.btn { font: 600 0.92rem inherit; font-family: inherit; cursor: pointer; border-radius: 8px; padding: 10px 16px;
+  border: 1px solid var(--ink); background: var(--ink); color: var(--card); }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn.small { padding: 5px 10px; font-size: 0.82rem; }
+.btn:disabled { opacity: 0.55; cursor: default; }
+.actions { display: flex; gap: 8px; }
+
+/* List */
+.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+.bar input[type=search] { flex: 1 1 200px; background: var(--card); }
+.bar select { width: auto; background: var(--card); }
+.tabs { display: flex; gap: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+.tabs button { border: 0; background: none; font: 500 0.86rem inherit; font-family: inherit; color: var(--muted);
+  padding: 6px 12px; border-radius: 7px; cursor: pointer; }
+.tabs button[aria-pressed="true"] { background: var(--ink); color: var(--card); }
+.counts { color: var(--muted); font-size: 0.86rem; margin: 0 0 14px; }
+
+.proj { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; margin-bottom: 12px; }
+.proj-top { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+.proj h3 { margin: 0; font-size: 1.12rem; line-height: 1.3; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); font-size: 0.82rem; margin-top: 4px; }
+.meta .late { color: var(--warn); font-weight: 600; }
+.prio-High { color: var(--danger); font-weight: 600; }
+.proj p { margin: 10px 0 12px; white-space: pre-wrap; max-width: 75ch; }
+.desc-list { margin: 10px 0 12px; padding-left: 20px; max-width: 75ch; }
+.desc-list li { margin-bottom: 4px; padding-left: 2px; }
+.desc-list li::marker { color: var(--accent); }
+.lbl-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+.lbl-row label { margin: 0; }
+.lbl-row .linkbtn { color: var(--accent-ink); font-weight: 600; padding: 2px 4px; }
+.status { width: auto; border-radius: 999px; padding: 4px 10px; font-size: 0.82rem; font-weight: 600; border: 0; }
+.status[data-s="Not started"] { background: var(--s-new); }
+.status[data-s="In progress"] { background: var(--s-prog); }
+.status[data-s="On hold"] { background: var(--s-hold); }
+.status[data-s="Done"] { background: var(--s-done); }
+.proj.done h3 { text-decoration: line-through; text-decoration-color: var(--muted); }
+.proj-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.linkbtn { border: 0; background: none; color: var(--muted); font: 500 0.84rem inherit; font-family: inherit; cursor: pointer; padding: 4px 6px; }
+.linkbtn:hover { color: var(--ink); }
+.linkbtn.del:hover { color: var(--danger); }
+.empty { border: 2px dashed var(--line); border-radius: 14px; padding: 36px 20px; text-align: center; color: var(--muted); }
+.notice { background: var(--warn-soft); color: var(--ink); border-radius: 8px; padding: 8px 12px; font-size: 0.85rem; margin-bottom: 12px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@media (prefers-reduced-motion: no-preference) { .proj.flash { animation: flash 900ms ease-out; } }
+@keyframes flash { from { box-shadow: 0 0 0 3px var(--accent); } to { box-shadow: 0 0 0 0 transparent; } }
+.docbar { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 16px; }
+.docbar-row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.docbar-main { flex: 1 1 260px; min-width: 0; }
+.docbar-main .lbl { margin: 0 0 2px; font-size: 0.8rem; color: var(--muted); font-weight: 500; }
+.docbar-main a { color: var(--ink); font-weight: 600; text-decoration-color: var(--accent); text-underline-offset: 3px; overflow-wrap: anywhere; }
+.docbar-status { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
+.docbar-status.err { color: var(--danger); }
+.docbar-status.ok { color: var(--accent-ink); }
+.auto { display: inline-flex; gap: 6px; align-items: center; font-size: 0.84rem; color: var(--muted); cursor: pointer; }
+.auto input { accent-color: var(--accent); }
+.docbar details { margin-top: 10px; }
+.docbar summary { cursor: pointer; font-size: 0.84rem; color: var(--muted); }
+.relink { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.relink input { flex: 1 1 220px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Project Organizer</h1>
+    <p class="sub">Every project you’re running or have been handed, with the tools each one needs. Projects are saved in this browser; use Export to back them up.</p>
+  </header>
+
+  <div class="grid">
+    <section class="panel" aria-labelledby="formTitle">
+      <h2 id="formTitle">New project</h2>
+      <form id="form" autocomplete="off">
+        <div class="f"><label for="title">Title</label>
+          <input type="text" id="title" required maxlength="140" placeholder="Q1 client onboarding playbook"></div>
+        <div class="f"><div class="lbl-row"><label for="desc">Description</label>
+          <button type="button" class="linkbtn" id="bulletBtn">• Add bullet</button></div>
+          <textarea id="desc" maxlength="2000" placeholder="• Deliverable&#10;• Who it’s for&#10;• Constraints or deadlines"></textarea>
+          <div class="hint">Bullets are added automatically. Press Enter for the next one, Enter twice to stop, or Shift+Enter for a line without a bullet.</div></div>
+
+        <div class="suggest" id="suggestBox" hidden>
+          <div class="suggest-head">
+            <strong>Suggested tools</strong>
+          </div>
+          <div class="chips" id="suggestChips"></div>
+          <ul class="why" id="whyList" hidden></ul>
+          <div class="hint" id="suggestNote"></div>
+        </div>
+
+        <div class="f">
+          <span class="lbl" id="toolsLbl">Tools</span>
+          <div class="tool-box">
+            <div class="chips" id="toolChips"></div>
+            <input type="text" id="toolInput" aria-labelledby="toolsLbl" placeholder="Type a tool and press Enter"
+              role="combobox" aria-expanded="false" aria-controls="acList" aria-autocomplete="list">
+            <ul class="ac" id="acList" role="listbox" hidden></ul>
+          </div>
+        </div>
+
+        <div class="two">
+          <div class="f"><label for="source">Type</label>
+            <select id="source"><option>My project</option><option>Assigned to me</option></select></div>
+          <div class="f"><label for="assignedBy">Assigned by</label>
+            <input type="text" id="assignedBy" maxlength="80" placeholder="Optional"></div>
+        </div>
+        <div class="two">
+          <div class="f"><label for="due">Due date</label><input type="date" id="due"></div>
+          <div class="f"><label for="priority">Priority</label>
+            <select id="priority"><option>Low</option><option selected>Medium</option><option>High</option></select></div>
+        </div>
+        <div class="f"><label for="status">Status</label>
+          <select id="status"><option>Not started</option><option>In progress</option><option>On hold</option><option>Done</option></select></div>
+
+        <div class="actions">
+          <button class="btn" type="submit" id="saveBtn">Add project</button>
+          <button class="btn ghost" type="button" id="cancelEdit" hidden>Cancel</button>
+        </div>
+      </form>
+    </section>
+
+    <section aria-labelledby="listTitle">
+      <h2 id="listTitle" class="sr">Projects</h2>
+      <div class="docbar" id="docbar">
+        <div class="docbar-row">
+          <div class="docbar-main">
+            <p class="lbl">Google Doc output</p>
+            <div id="docLink">No Google Doc linked yet</div>
+            <div class="docbar-status" id="docStatus" role="status"></div>
+          </div>
+          <label class="auto"><input type="checkbox" id="autoSync" checked> Sync after each change</label>
+          <button type="button" class="btn small" id="syncNow">Sync now</button>
+        </div>
+        <details id="setup">
+          <summary>Connection settings</summary>
+          <div class="f" style="margin-top:10px"><label for="scriptUrl">Sync script URL</label>
+            <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/…/exec"></div>
+          <div class="f"><label for="syncKey">Sync key</label>
+            <input type="text" id="syncKey" placeholder="The key shown when you ran setup" autocomplete="off"></div>
+          <div class="f"><label for="docUrlInput">Google Doc link</label>
+            <input type="text" id="docUrlInput" placeholder="https://docs.google.com/document/d/…"></div>
+          <button type="button" class="btn small" id="saveConn">Save settings</button>
+          <div class="hint">These are stored only in this browser. Syncing replaces the doc’s contents with your project list.</div>
+        </details>
+      </div>
+      <div id="notice"></div>
+      <div class="bar">
+        <div class="tabs" role="group" aria-label="Filter by type">
+          <button type="button" data-f="all" aria-pressed="true">All</button>
+          <button type="button" data-f="My project" aria-pressed="false">Mine</button>
+          <button type="button" data-f="Assigned to me" aria-pressed="false">Assigned</button>
+        </div>
+        <select id="statusFilter" aria-label="Filter by status">
+          <option value="open">Open projects</option><option value="all">All statuses</option>
+          <option>Not started</option><option>In progress</option><option>On hold</option><option>Done</option>
+        </select>
+        <select id="sortBy" aria-label="Sort">
+          <option value="due">Sort by due date</option><option value="priority">Sort by priority</option><option value="new">Newest first</option>
+        </select>
+        <input type="search" id="q" placeholder="Search projects or tools" aria-label="Search">
+        <button type="button" class="btn ghost small" id="exportBtn">Export</button>
+        <button type="button" class="btn ghost small" id="importBtn">Import</button>
+        <input type="file" id="importFile" accept=".json,application/json" hidden>
+      </div>
+      <p class="counts" id="counts"></p>
+      <div id="list"><div class="empty">Loading your projects…</div></div>
+    </section>
+  </div>
+</div>
+
+<script>
+/* ---------- Tool library for instant suggestions ---------- */
+const RULES = [
+  { k: ["report","reporting","kpi","metrics","analysis","analytics","data","dashboard"], t: ["Microsoft Excel","Power BI","Google Sheets","Looker Studio"] },
+  { k: ["budget","cost","forecast","finance","invoice","expense"], t: ["Microsoft Excel","Google Sheets","QuickBooks"] },
+  { k: ["presentation","deck","pitch","slides","proposal"], t: ["PowerPoint","Google Slides","Canva"] },
+  { k: ["timeline","schedule","plan","planning","roadmap","milestone","gantt"], t: ["Microsoft Project","Smartsheet","Asana","Monday.com"] },
+  { k: ["task","tasks","tracking","tracker","team","coordinate","project"], t: ["Asana","Trello","ClickUp","Microsoft Planner"] },
+  { k: ["process","workflow","sop","procedure","flowchart","mapping"], t: ["Lucidchart","Microsoft Visio","Miro","Confluence"] },
+  { k: ["documentation","document","manual","guide","policy","playbook","knowledge"], t: ["Confluence","Notion","Google Docs","Microsoft Word"] },
+  { k: ["training","onboarding","learning","course","orientation"], t: ["Loom","LMS (e.g. TalentLMS)","Google Forms","Canva"] },
+  { k: ["survey","feedback","poll","questionnaire","satisfaction","csat"], t: ["Google Forms","Microsoft Forms","SurveyMonkey","Typeform"] },
+  { k: ["support","helpdesk","ticket","tickets","customer","client","service"], t: ["Zendesk","Freshdesk","Jira Service Management","HubSpot"] },
+  { k: ["crm","sales","lead","leads","pipeline","account"], t: ["HubSpot","Salesforce","Pipedrive"] },
+  { k: ["hiring","recruit","recruitment","interview","hr","staffing"], t: ["LinkedIn Recruiter","Workable","Google Calendar","Microsoft Teams"] },
+  { k: ["meeting","workshop","kickoff","stakeholder","communication","update"], t: ["Microsoft Teams","Zoom","Slack","Google Calendar"] },
+  { k: ["automation","automate","integrate","integration","sync"], t: ["Power Automate","Zapier","Make"] },
+  { k: ["website","web","landing","portal","page"], t: ["WordPress","Figma","Webflow","Google Analytics"] },
+  { k: ["app","software","system","development","bug","release","migration"], t: ["Jira","GitHub","Figma","Postman"] },
+  { k: ["design","brand","branding","logo","graphic","visual"], t: ["Canva","Figma","Adobe Illustrator"] },
+  { k: ["marketing","campaign","email","newsletter","social","content"], t: ["Mailchimp","Canva","Meta Business Suite","Google Analytics"] },
+  { k: ["video","tutorial","recording","demo"], t: ["Loom","Camtasia","CapCut"] },
+  { k: ["event","conference","webinar","launch"], t: ["Eventbrite","Zoom Webinars","Canva","Google Sheets"] },
+  { k: ["risk","audit","compliance","quality","qa","review"], t: ["Microsoft Excel","SharePoint","Checklist template"] },
+  { k: ["file","files","storage","share","sharing","repository"], t: ["SharePoint","Google Drive","OneDrive"] }
+];
+const ALL_TOOLS = [...new Set(RULES.flatMap(r => r.t))].sort();
+const STOP = new Set("the a an and or for of to in on with by at from is are be this that our my new q1 q2 q3 q4 all".split(" "));
+const words = s => (s || "").toLowerCase().match(/[a-z0-9]+/g) || [];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const norm = s => s.trim().toLowerCase();
+
+/* ---------- State ---------- */
+let projects = [];
+let draftTools = [];
+let editingId = null;
+let filter = { type: "all", status: "open", q: "", sort: "due" };
+let store = null;          // { save(p), remove(id) }
+let lastFlash = null;
+
+/* ---------- Predictive suggestions ---------- */
+function localSuggest(text) {
+  const w = words(text).filter(x => !STOP.has(x));
+  if (!w.length) return [];
+  const joined = " " + w.join(" ") + " ";
+  const score = new Map();
+  const bump = (t, n) => score.set(t, (score.get(t) || 0) + n);
+  RULES.forEach(r => r.k.forEach(k => { if (joined.includes(" " + k + " ") || (k.length > 4 && joined.includes(" " + k))) r.t.forEach(t => bump(t, 2)); }));
+  // Learn from your own history: tools used on similar past projects rank higher
+  const set = new Set(w);
+  projects.forEach(p => {
+    if (p.id === editingId) return;
+    const overlap = words(p.title + " " + p.description).filter(x => set.has(x) && !STOP.has(x) && x.length > 2).length;
+    if (overlap) (p.tools || []).forEach(t => bump(t, 1.5 * overlap));
+  });
+  const have = new Set(draftTools.map(norm));
+  return [...score.entries()].filter(([t]) => !have.has(norm(t))).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([t]) => t);
+}
+
+let aiExtra = [];
+function renderSuggestions() {
+  const text = $("title").value + " " + $("desc").value;
+  const have = new Set(draftTools.map(norm));
+  const local = localSuggest(text);
+  const extra = aiExtra.filter(x => !have.has(norm(x.name)) && !local.some(l => norm(l) === norm(x.name)));
+  const box = $("suggestBox");
+  const hasText = words(text).length > 0;
+  box.hidden = !hasText;
+  $("suggestChips").innerHTML = [...local.map(t => ({ name: t })), ...extra].map(s =>
+    `<button type="button" class="sg" data-add="${esc(s.name)}">+ ${esc(s.name)}</button>`).join("");
+  const why = extra.filter(x => x.why);
+  $("whyList").hidden = !why.length;
+  $("whyList").innerHTML = why.map(x => `<li><b>${esc(x.name)}:</b> ${esc(x.why)}</li>`).join("");
+  if (hasText && !local.length && !extra.length && !$("suggestNote").dataset.busy)
+    $("suggestNote").textContent = "No matches yet. Try adding more detail to the description.";
+  else if (!$("suggestNote").dataset.busy) $("suggestNote").textContent = "";
+}
+
+/* ---------- Tools input with autocomplete ---------- */
+const $ = id => document.getElementById(id);
+function renderToolChips() {
+  $("toolChips").innerHTML = draftTools.map((t, i) =>
+    `<span class="chip">${esc(t)}<button type="button" data-rm="${i}" aria-label="Remove ${esc(t)}">×</button></span>`).join("");
+}
+function addTool(name) {
+  const t = name.trim().slice(0, 60);
+  if (!t || draftTools.some(x => norm(x) === norm(t))) return;
+  draftTools.push(t);
+  renderToolChips(); renderSuggestions();
+}
+let acIndex = -1, acItems = [];
+function knownTools() {
+  return [...new Set([...ALL_TOOLS, ...projects.flatMap(p => p.tools || [])])];
+}
+function renderAC() {
+  const v = norm($("toolInput").value);
+  const have = new Set(draftTools.map(norm));
+  acItems = v ? knownTools().filter(t => norm(t).includes(v) && !have.has(norm(t)))
+    .sort((a, b) => norm(a).indexOf(v) - norm(b).indexOf(v)).slice(0, 8) : [];
+  const list = $("acList");
+  list.hidden = !acItems.length;
+  $("toolInput").setAttribute("aria-expanded", String(!!acItems.length));
+  if (acIndex >= acItems.length) acIndex = acItems.length - 1;
+  list.innerHTML = acItems.map((t, i) => `<li role="option" id="ac${i}" data-i="${i}" aria-selected="${i === acIndex}">${esc(t)}</li>`).join("");
+  $("toolInput").setAttribute("aria-activedescendant", acIndex >= 0 ? "ac" + acIndex : "");
+}
+$("toolInput").addEventListener("input", () => { acIndex = -1; renderAC(); });
+$("toolInput").addEventListener("keydown", e => {
+  if (e.key === "ArrowDown" && acItems.length) { e.preventDefault(); acIndex = (acIndex + 1) % acItems.length; renderAC(); }
+  else if (e.key === "ArrowUp" && acItems.length) { e.preventDefault(); acIndex = (acIndex - 1 + acItems.length) % acItems.length; renderAC(); }
+  else if (e.key === "Enter" || e.key === ",") {
+    e.preventDefault();
+    addTool(acIndex >= 0 ? acItems[acIndex] : $("toolInput").value);
+    $("toolInput").value = ""; acIndex = -1; renderAC();
+  } else if (e.key === "Backspace" && !$("toolInput").value && draftTools.length) {
+    draftTools.pop(); renderToolChips(); renderSuggestions();
+  } else if (e.key === "Escape") { acItems = []; $("acList").hidden = true; }
+});
+$("toolInput").addEventListener("blur", () => setTimeout(() => { $("acList").hidden = true; }, 150));
+$("acList").addEventListener("mousedown", e => {
+  const li = e.target.closest("li"); if (!li) return;
+  e.preventDefault(); addTool(acItems[+li.dataset.i]); $("toolInput").value = ""; acIndex = -1; renderAC();
+});
+$("toolChips").addEventListener("click", e => {
+  const i = e.target.dataset.rm; if (i === undefined) return;
+  draftTools.splice(+i, 1); renderToolChips(); renderSuggestions();
+});
+$("suggestChips").addEventListener("click", e => { const n = e.target.dataset.add; if (n) addTool(n); });
+let typingTimer;
+["title", "desc"].forEach(id => $(id).addEventListener("input", () => {
+  clearTimeout(typingTimer); typingTimer = setTimeout(renderSuggestions, 200);
+}));
+
+/* ---------- Form ---------- */
+function resetForm() {
+  $("form").reset(); $("priority").value = "Medium";
+  draftTools = []; aiExtra = []; editingId = null;
+  $("formTitle").textContent = "New project"; $("saveBtn").textContent = "Add project"; $("cancelEdit").hidden = true;
+  renderToolChips(); renderSuggestions();
+}
+$("cancelEdit").addEventListener("click", resetForm);
+$("form").addEventListener("submit", async e => {
+  e.preventDefault();
+  if ($("toolInput").value.trim()) { addTool($("toolInput").value); $("toolInput").value = ""; }
+  const existing = projects.find(p => p.id === editingId);
+  const p = {
+    id: editingId || ("p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+    title: $("title").value.trim(),
+    description: $("desc").value.split("\n").filter(l => !/^\s*•\s*$/.test(l)).join("\n").trim(),
+    tools: [...draftTools],
+    source: $("source").value,
+    assignedBy: $("assignedBy").value.trim(),
+    due: $("due").value,
+    priority: $("priority").value,
+    status: $("status").value,
+    created: existing?.created || Date.now(),
+    updated: Date.now()
+  };
+  if (!p.title) return;
+  upsertLocal(p);
+  lastFlash = p.id;
+  resetForm(); render();
+  await persist(p);
+});
+
+function startEdit(id) {
+  const p = projects.find(x => x.id === id); if (!p) return;
+  editingId = id;
+  $("title").value = p.title; $("desc").value = p.description || "";
+  $("source").value = p.source || "My project"; $("assignedBy").value = p.assignedBy || "";
+  $("due").value = p.due || ""; $("priority").value = p.priority || "Medium"; $("status").value = p.status || "Not started";
+  draftTools = [...(p.tools || [])]; aiExtra = [];
+  $("formTitle").textContent = "Edit project"; $("saveBtn").textContent = "Save changes"; $("cancelEdit").hidden = false;
+  renderToolChips(); renderSuggestions();
+  $("title").focus();
+  $("form").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+/* ---------- Bulleted description ---------- */
+const MARK = /^\s*(?:[•\-*–]|\d+[.)])\s*/;
+function descHTML(text) {
+  const lines = (text || "").split(/\n/).map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return "";
+  if (lines.length === 1 && !MARK.test(lines[0])) return `<p>${esc(lines[0])}</p>`;
+  const items = lines.map(l => l.replace(MARK, "")).filter(Boolean);
+  return `<ul class="desc-list">${items.map(l => `<li>${esc(l)}</li>`).join("")}</ul>`;
+}
+$("desc").addEventListener("focus", e => {
+  const ta = e.target;
+  if (!ta.value) { ta.value = "• "; ta.selectionStart = ta.selectionEnd = 2; }
+});
+$("desc").addEventListener("blur", e => {
+  const ta = e.target;
+  ta.value = ta.value.split("\n").filter(l => !/^\s*•\s*$/.test(l)).join("\n").replace(/\s+$/, "");
+});
+function lineBounds(ta) {
+  const v = ta.value, pos = ta.selectionStart;
+  const start = v.lastIndexOf("\n", pos - 1) + 1;
+  let end = v.indexOf("\n", pos); if (end < 0) end = v.length;
+  return { v, pos, start, end, line: v.slice(start, end) };
+}
+$("desc").addEventListener("keydown", e => {
+  if (e.key !== "Enter" || e.shiftKey) return;
+  const ta = e.target, { v, pos, start, end, line } = lineBounds(ta);
+  if (!/^\s*•\s?/.test(line)) {
+    if (!line.trim()) return;               // blank line after a list: plain new line
+    e.preventDefault();                     // turn this line into a bullet, then start the next
+    const clean = line.replace(MARK, "");
+    const removed = line.length - clean.length;
+    const at = start + 2 + Math.max(0, pos - start - removed);
+    ta.value = v.slice(0, start) + "• " + clean + v.slice(end);
+    ta.value = ta.value.slice(0, at) + "\n• " + ta.value.slice(at);
+    ta.selectionStart = ta.selectionEnd = at + 3;
+    ta.dispatchEvent(new Event("input"));
+    return;
+  }
+  e.preventDefault();
+  if (/^\s*•\s*$/.test(line)) {           // empty bullet: end the list
+    ta.value = v.slice(0, start) + v.slice(end);
+    ta.selectionStart = ta.selectionEnd = start;
+  } else {
+    ta.value = v.slice(0, pos) + "\n• " + v.slice(ta.selectionEnd);
+    ta.selectionStart = ta.selectionEnd = pos + 3;
+  }
+  ta.dispatchEvent(new Event("input"));
+});
+$("bulletBtn").addEventListener("click", () => {
+  const ta = $("desc"), { v, pos, start, line } = lineBounds(ta);
+  if (/^\s*•/.test(line)) {                 // already a bullet: add a new one below
+    const end = lineBounds(ta).end;
+    ta.value = v.slice(0, end) + "\n• " + v.slice(end);
+    ta.selectionStart = ta.selectionEnd = end + 3;
+  } else {
+    const clean = line.replace(MARK, "");
+    ta.value = v.slice(0, start) + "• " + clean + v.slice(start + line.length);
+    ta.selectionStart = ta.selectionEnd = start + 2 + clean.length;
+  }
+  ta.focus();
+  ta.dispatchEvent(new Event("input"));
+});
+
+/* ---------- List ---------- */
+const PRI = { High: 0, Medium: 1, Low: 2 };
+function fmtDate(d) {
+  if (!d) return "";
+  const dt = new Date(d + "T00:00:00");
+  return dt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+function isLate(p) {
+  if (!p.due || p.status === "Done") return false;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return new Date(p.due + "T00:00:00") < today;
+}
+function render() {
+  const q = norm(filter.q);
+  let list = projects.filter(p =>
+    (filter.type === "all" || p.source === filter.type) &&
+    (filter.status === "all" || (filter.status === "open" ? p.status !== "Done" : p.status === filter.status)) &&
+    (!q || norm([p.title, p.description, p.assignedBy, ...(p.tools || [])].join(" ")).includes(q)));
+  list.sort((a, b) => {
+    if (filter.sort === "priority") return (PRI[a.priority] ?? 1) - (PRI[b.priority] ?? 1) || (a.due || "9999").localeCompare(b.due || "9999");
+    if (filter.sort === "new") return (b.created || 0) - (a.created || 0);
+    return (a.due || "9999").localeCompare(b.due || "9999") || (PRI[a.priority] ?? 1) - (PRI[b.priority] ?? 1);
+  });
+  const open = projects.filter(p => p.status !== "Done").length;
+  const late = projects.filter(isLate).length;
+  $("counts").textContent = projects.length
+    ? `${open} open of ${projects.length} total` + (late ? `, ${late} overdue` : "")
+    : "";
+  if (!projects.length) { $("list").innerHTML = `<div class="empty">No projects yet. Add your first one with the form; tool suggestions appear as you type.</div>`; return; }
+  if (!list.length) { $("list").innerHTML = `<div class="empty">No projects match these filters.</div>`; return; }
+  $("list").innerHTML = list.map(p => `
+    <article class="proj ${p.status === "Done" ? "done" : ""} ${p.id === lastFlash ? "flash" : ""}">
+      <div class="proj-top">
+        <div>
+          <h3>${esc(p.title)}</h3>
+          <div class="meta">
+            <span>${esc(p.source || "My project")}${p.assignedBy ? " by " + esc(p.assignedBy) : ""}</span>
+            ${p.due ? `<span class="${isLate(p) ? "late" : ""}">${isLate(p) ? "Overdue: " : "Due "}${fmtDate(p.due)}</span>` : ""}
+            <span class="prio-${esc(p.priority)}">${esc(p.priority || "Medium")} priority</span>
+          </div>
+        </div>
+        <select class="status" data-s="${esc(p.status)}" data-status="${esc(p.id)}" aria-label="Status of ${esc(p.title)}">
+          ${["Not started", "In progress", "On hold", "Done"].map(s => `<option ${p.status === s ? "selected" : ""}>${s}</option>`).join("")}
+        </select>
+      </div>
+      ${descHTML(p.description)}
+      ${(p.tools || []).length ? `<div class="chips">${p.tools.map(t => `<span class="chip" style="padding-right:11px">${esc(t)}</span>`).join("")}</div>` : `<div class="meta">No tools listed yet</div>`}
+      <div class="proj-foot">
+        <span class="meta">Updated ${new Date(p.updated || p.created || Date.now()).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+        <span><button class="linkbtn" data-edit="${esc(p.id)}">Edit</button><button class="linkbtn del" data-del="${esc(p.id)}">Delete</button></span>
+      </div>
+    </article>`).join("");
+  lastFlash = null;
+}
+$("list").addEventListener("change", async e => {
+  const id = e.target.dataset.status; if (!id) return;
+  const p = projects.find(x => x.id === id); if (!p) return;
+  p.status = e.target.value; p.updated = Date.now();
+  render(); await persist(p);
+});
+$("list").addEventListener("click", async e => {
+  if (e.target.dataset.edit) startEdit(e.target.dataset.edit);
+  const id = e.target.dataset.del;
+  if (id) {
+    const p = projects.find(x => x.id === id);
+    if (!p || !confirm(`Delete “${p.title}”? This can’t be undone.`)) return;
+    projects = projects.filter(x => x.id !== id);
+    if (editingId === id) resetForm();
+    render(); await removeStored(id);
+  }
+});
+document.querySelector(".tabs").addEventListener("click", e => {
+  const f = e.target.dataset.f; if (!f) return;
+  filter.type = f;
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.f === f)));
+  render();
+});
+$("statusFilter").addEventListener("change", e => { filter.status = e.target.value; render(); });
+$("sortBy").addEventListener("change", e => { filter.sort = e.target.value; render(); });
+$("q").addEventListener("input", e => { filter.q = e.target.value; render(); });
+
+/* ---------- Storage: your private Claude storage, or this browser as a fallback ---------- */
+function upsertLocal(p) {
+  const i = projects.findIndex(x => x.id === p.id);
+  if (i >= 0) projects[i] = p; else projects.unshift(p);
+}
+function notice(msg) { $("notice").innerHTML = msg ? `<div class="notice">${esc(msg)}</div>` : ""; }
+const LS = "project-organizer-v1";
+function loadLocal() { try { return JSON.parse(localStorage.getItem(LS)) || []; } catch { return []; } }
+function saveLocal() { try { localStorage.setItem(LS, JSON.stringify(projects)); } catch {} }
+async function persist(p) {
+  if (!store) { saveLocal(); scheduleSync(); return; }
+  try { await store.doc(p.id).set(p); } catch (e) { notice("Couldn’t save that change. Check your connection and try again."); }
+  scheduleSync();
+}
+async function removeStored(id) {
+  if (!store) { saveLocal(); scheduleSync(); return; }
+  try { await store.doc(id).delete(); } catch (e) { notice("Couldn’t delete that project. Check your connection and try again."); }
+  scheduleSync();
+}
+
+/* ---------- Google Doc output ---------- */
+const DOCS = "Google Docs";
+let settings = {};
+let syncing = false, syncAgain = false, syncTimer = null, lastSyncError = null;
+
+async function saveSettings(patch) {
+  settings = { ...settings, ...patch };
+  renderDocBar();
+  if (!store) { try { localStorage.setItem(LS + "-settings", JSON.stringify(settings)); } catch {} return; }
+  try { await store.doc("settings").set(settings); } catch (e) { notice("Couldn’t save your Google Doc settings. Try again."); }
+}
+function docUrl(id) { return "https://docs.google.com/document/d/" + id + "/edit"; }
+function setDocStatus(text, kind) {
+  const el = $("docStatus");
+  el.textContent = text || "";
+  el.className = "docbar-status" + (kind ? " " + kind : "");
+}
+function renderDocBar() {
+  const id = settings.googleDocId;
+  $("docLink").innerHTML = id
+    ? `<a href="${esc(docUrl(id))}" target="_blank" rel="noopener">${esc(settings.googleDocTitle || "Project Log")}</a>`
+    : "No Google Doc linked yet";
+  $("autoSync").checked = settings.autoSync !== false;
+  const ready = !!(settings.scriptUrl && settings.syncKey);
+  $("syncNow").disabled = !ready || syncing;
+  if (syncing) return;
+  if (lastSyncError) return setDocStatus(lastSyncError, "err");
+  if (!ready) return setDocStatus("Open Connection settings and add your sync script URL and key to turn on Google Doc output.", "");
+  setDocStatus(settings.lastSynced
+    ? "Last synced " + new Date(settings.lastSynced).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+    : "Not synced yet. Click Sync now to write your projects to the doc.", settings.lastSynced ? "ok" : "");
+}
+function scheduleSync() {
+  if (!settings.scriptUrl || !settings.syncKey || settings.autoSync === false) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => syncDoc(), 2500);
+}
+function syncErrorText(e) {
+  switch (e && e.code) {
+    case "bad_key": return "The sync key doesn’t match the one in your script. Check it in Connection settings.";
+    case "no_doc": return "The script couldn’t open the Google Doc. Check DOC_ID in the script and that you can edit the doc.";
+    case "network": return "Couldn’t reach the sync script. Check the URL, and that the script is deployed as a web app with access set to Anyone.";
+    default: return "The sync didn’t finish" + (e && e.message ? ": " + e.message : "") + ". Click Sync now to try again.";
+  }
+}
+
+const STATUS_ORDER = ["In progress", "Not started", "On hold", "Done"];
+function buildDoc() {
+  // Each paragraph: { text, style, bullet, bold: [[from, to]], muted }
+  const paras = [];
+  const P = (text, style = "NORMAL_TEXT", extra = {}) => paras.push({ text: (text.replace(/\n/g, " ").trim() || "-"), style, ...extra });
+  const labeled = parts => {
+    let text = "", bold = [];
+    parts.forEach(([label, value], i) => {
+      if (i) text += "    ";
+      bold.push([text.length, text.length + label.length]);
+      text += label + " " + value;
+    });
+    return { text, bold };
+  };
+  const open = projects.filter(p => p.status !== "Done").length;
+  const late = projects.filter(isLate).length;
+  P("ClearDesk Project Log", "HEADING_1");
+  P("Updated automatically from the Project Organizer on " + new Date().toLocaleString(undefined, { month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) + ". Changes made directly in this document are replaced on the next sync.", "NORMAL_TEXT", { muted: true });
+  P(projects.length
+    ? `${projects.length} project${projects.length === 1 ? "" : "s"}: ${open} open, ${projects.length - open} done` + (late ? `, ${late} overdue.` : ".")
+    : "No projects yet.", "NORMAL_TEXT", { space: true });
+  STATUS_ORDER.forEach(status => {
+    const group = projects.filter(p => (p.status || "Not started") === status)
+      .sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999") || (PRI[a.priority] ?? 1) - (PRI[b.priority] ?? 1));
+    if (!group.length) return;
+    P(`${status} (${group.length})`, "HEADING_2");
+    group.forEach(p => {
+      P(p.title || "Untitled project", "HEADING_3");
+      const meta = [];
+      meta.push(["Due:", p.due ? fmtDate(p.due) + (isLate(p) ? " (overdue)" : "") : "No date"]);
+      meta.push(["Priority:", p.priority || "Medium"]);
+      meta.push(["Type:", (p.source || "My project") + (p.assignedBy ? " by " + p.assignedBy : "")]);
+      const m = labeled(meta);
+      P(m.text, "NORMAL_TEXT", { bold: m.bold });
+      (p.description || "").split("\n").map(l => l.trim()).filter(l => l && l !== "•").forEach(l => {
+        if (/^[•\-*–]\s*/.test(l)) P(l.replace(/^[•\-*–]\s*/, ""), "NORMAL_TEXT", { bullet: true });
+        else P(l, "NORMAL_TEXT");
+      });
+      const t = labeled([["Tools:", (p.tools || []).length ? p.tools.join(", ") : "None listed yet"]]);
+      P(t.text, "NORMAL_TEXT", { bold: t.bold, space: true });
+    });
+  });
+  return paras;
+}
+
+async function syncDoc() {
+  if (!settings.scriptUrl || !settings.syncKey) return;
+  if (syncing) { syncAgain = true; return; }
+  clearTimeout(syncTimer);
+  syncing = true; syncAgain = false; lastSyncError = null;
+  $("syncNow").disabled = true;
+  setDocStatus("Syncing to Google Docs…", "");
+  try {
+    let res;
+    try {
+      res = await fetch(settings.scriptUrl, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ key: settings.syncKey, paragraphs: buildDoc() }) });
+    } catch { throw { code: "network" }; }
+    let data;
+    try { data = await res.json(); } catch { throw { code: "network" }; }
+    if (!data.ok) throw { code: data.error, message: data.message };
+    syncing = false;
+    saveSettings({ lastSynced: Date.now(), googleDocTitle: data.title || settings.googleDocTitle,
+      googleDocId: data.docId || settings.googleDocId });
+  } catch (e) {
+    syncing = false;
+    lastSyncError = syncErrorText(e);
+  }
+  renderDocBar();
+  if (syncAgain && !lastSyncError) scheduleSync();
+}
+
+$("syncNow").addEventListener("click", () => { lastSyncError = null; syncDoc(); });
+$("autoSync").addEventListener("change", e => saveSettings({ autoSync: e.target.checked }));
+$("saveConn").addEventListener("click", () => {
+  const url = $("scriptUrl").value.trim();
+  const key = $("syncKey").value.trim();
+  const v = $("docUrlInput").value.trim();
+  const m = v.match(/\/document\/d\/([A-Za-z0-9_-]{20,})/);
+  if (url && !/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)) { setDocStatus("The sync script URL should start with https://script.google.com and end with /exec.", "err"); return; }
+  if (v && !m) { setDocStatus("That doesn’t look like a Google Docs link. Copy it from the doc’s address bar.", "err"); return; }
+  lastSyncError = null;
+  saveSettings({ scriptUrl: url, syncKey: key, ...(m ? { googleDocId: m[1] } : {}) });
+  $("setup").open = false;
+  if (url && key) syncDoc();
+});
+
+/* ---------- Export / import ---------- */
+$("exportBtn").addEventListener("click", () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(projects, null, 2)], { type: "application/json" }));
+  a.download = "projects-" + new Date().toISOString().slice(0, 10) + ".json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+$("importBtn").addEventListener("click", () => $("importFile").click());
+$("importFile").addEventListener("change", async e => {
+  const file = e.target.files[0]; e.target.value = "";
+  if (!file) return;
+  try {
+    const list = JSON.parse(await file.text());
+    if (!Array.isArray(list)) throw 0;
+    let added = 0, updated = 0;
+    list.filter(p => p && p.title).forEach(p => {
+      const item = { status: "Not started", priority: "Medium", source: "My project", tools: [], ...p,
+        id: p.id || ("p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)) };
+      if (projects.some(x => x.id === item.id)) updated++; else added++;
+      upsertLocal(item);
+    });
+    saveLocal(); render(); scheduleSync();
+    notice(`Imported ${added} new project${added === 1 ? "" : "s"}` + (updated ? ` and updated ${updated}.` : "."));
+  } catch { notice("That file isn’t a project export. Choose a .json file made with the Export button."); }
+});
+
+async function init() {
+  try { settings = JSON.parse(localStorage.getItem(LS + "-settings")) || {}; } catch { settings = {}; }
+  $("scriptUrl").value = settings.scriptUrl || "";
+  $("syncKey").value = settings.syncKey || "";
+  if (settings.googleDocId) $("docUrlInput").value = docUrl(settings.googleDocId);
+  if (!settings.scriptUrl) $("setup").open = true;
+  projects = loadLocal();
+  renderToolChips(); renderSuggestions(); render(); renderDocBar();
+}
+init();
+</script>
+</body>
+</html>
