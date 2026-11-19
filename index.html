@@ -126,26 +126,6 @@ textarea { min-height: 88px; resize: vertical; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 @media (prefers-reduced-motion: no-preference) { .proj.flash { animation: flash 900ms ease-out; } }
 @keyframes flash { from { box-shadow: 0 0 0 3px var(--accent); } to { box-shadow: 0 0 0 0 transparent; } }
-.docbar { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 16px; }
-.docbar-row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
-.docbar-main { flex: 1 1 260px; min-width: 0; }
-.docbar-main .lbl { margin: 0 0 2px; font-size: 0.8rem; color: var(--muted); font-weight: 500; }
-.docbar-main a { color: var(--ink); font-weight: 600; text-decoration-color: var(--accent); text-underline-offset: 3px; overflow-wrap: anywhere; }
-.docbar-status { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
-.docbar-status.err { color: var(--danger); }
-.docbar-status.ok { color: var(--accent-ink); }
-.auto { display: inline-flex; gap: 6px; align-items: center; font-size: 0.84rem; color: var(--muted); cursor: pointer; }
-.auto input { accent-color: var(--accent); }
-.docbar details { margin-top: 10px; }
-.docbar summary { cursor: pointer; font-size: 0.84rem; color: var(--muted); }
-.relink { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
-.relink input { flex: 1 1 220px; }
-.guide { background: var(--field); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 10px 0 14px; font-size: 0.88rem; }
-.guide-title { font-weight: 600; margin: 0 0 6px; }
-.guide ol { margin: 0; padding-left: 20px; }
-.guide li { margin-bottom: 6px; }
-.guide li:last-child { margin-bottom: 0; }
-.guide .btn { margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -208,40 +188,6 @@ textarea { min-height: 88px; resize: vertical; }
 
     <section aria-labelledby="listTitle">
       <h2 id="listTitle" class="sr">Projects</h2>
-      <div class="docbar" id="docbar">
-        <div class="docbar-row">
-          <div class="docbar-main">
-            <p class="lbl">Google Doc output</p>
-            <div id="docLink">No Google Doc linked yet</div>
-            <div class="docbar-status" id="docStatus" role="status"></div>
-          </div>
-          <label class="auto"><input type="checkbox" id="autoSync" checked> Sync after each change</label>
-          <button type="button" class="btn small" id="syncNow">Sync now</button>
-        </div>
-        <details id="setup">
-          <summary>Connection settings</summary>
-          <div class="guide">
-            <p class="guide-title">Set up your own Google Doc output (about 10 minutes, once)</p>
-            <ol>
-              <li>Create a Google Doc for your project log. Typing <b>docs.new</b> in the address bar makes one.</li>
-              <li>In that doc, open <b>Extensions → Apps Script</b>, delete the sample code, and paste the sync script.<br>
-                <button type="button" class="btn ghost small" id="copyScript">Copy sync script</button></li>
-              <li>Click the Save icon, choose <b>setup</b> in the function menu, and click <b>Run</b>. Approve the permissions with your Google account. If Google says the app isn’t verified, click <b>Advanced</b>, then <b>Go to</b> your project; it’s your own script.</li>
-              <li>In the Execution log, copy the key after “Your sync key:”.</li>
-              <li>Click <b>Deploy → New deployment</b>, click the gear and choose <b>Web app</b>. Set “Execute as” to <b>Me</b> and “Who has access” to <b>Anyone</b>, click <b>Deploy</b>, approve again if asked, and copy the Web app URL.</li>
-              <li>Paste the URL and key below and click <b>Save settings</b>.</li>
-            </ol>
-          </div>
-          <div class="f"><label for="scriptUrl">Sync script URL</label>
-            <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/…/exec"></div>
-          <div class="f"><label for="syncKey">Sync key</label>
-            <input type="text" id="syncKey" placeholder="The key shown when you ran setup" autocomplete="off"></div>
-          <div class="f"><label for="docUrlInput">Google Doc link (optional)</label>
-            <input type="text" id="docUrlInput" placeholder="https://docs.google.com/document/d/…"></div>
-          <button type="button" class="btn small" id="saveConn">Save settings</button>
-          <div class="hint">Your settings and projects are stored only in this browser, so each person who uses this page has their own. Syncing replaces the doc’s contents with your project list, so use a doc made for this.</div>
-        </details>
-      </div>
       <div id="notice"></div>
       <div class="bar">
         <div class="tabs" role="group" aria-label="Filter by type">
@@ -599,247 +545,13 @@ const LS = "project-organizer-v1";
 function loadLocal() { try { return JSON.parse(localStorage.getItem(LS)) || []; } catch { return []; } }
 function saveLocal() { try { localStorage.setItem(LS, JSON.stringify(projects)); } catch {} }
 async function persist(p) {
-  if (!store) { saveLocal(); scheduleSync(); return; }
+  if (!store) { saveLocal(); return; }
   try { await store.doc(p.id).set(p); } catch (e) { notice("Couldn’t save that change. Check your connection and try again."); }
-  scheduleSync();
 }
 async function removeStored(id) {
-  if (!store) { saveLocal(); scheduleSync(); return; }
+  if (!store) { saveLocal(); return; }
   try { await store.doc(id).delete(); } catch (e) { notice("Couldn’t delete that project. Check your connection and try again."); }
-  scheduleSync();
 }
-
-/* ---------- Google Doc output ---------- */
-const DOCS = "Google Docs";
-let settings = {};
-let syncing = false, syncAgain = false, syncTimer = null, lastSyncError = null;
-
-async function saveSettings(patch) {
-  settings = { ...settings, ...patch };
-  renderDocBar();
-  if (!store) { try { localStorage.setItem(LS + "-settings", JSON.stringify(settings)); } catch {} return; }
-  try { await store.doc("settings").set(settings); } catch (e) { notice("Couldn’t save your Google Doc settings. Try again."); }
-}
-function docUrl(id) { return "https://docs.google.com/document/d/" + id + "/edit"; }
-function setDocStatus(text, kind) {
-  const el = $("docStatus");
-  el.textContent = text || "";
-  el.className = "docbar-status" + (kind ? " " + kind : "");
-}
-function renderDocBar() {
-  const id = settings.googleDocId;
-  $("docLink").innerHTML = id
-    ? `<a href="${esc(docUrl(id))}" target="_blank" rel="noopener">${esc(settings.googleDocTitle || "Project Log")}</a>`
-    : "No Google Doc linked yet";
-  $("autoSync").checked = settings.autoSync !== false;
-  const ready = !!(settings.scriptUrl && settings.syncKey);
-  $("syncNow").disabled = !ready || syncing;
-  if (syncing) return;
-  if (lastSyncError) return setDocStatus(lastSyncError, "err");
-  if (!ready) return setDocStatus("Open Connection settings and add your sync script URL and key to turn on Google Doc output.", "");
-  setDocStatus(settings.lastSynced
-    ? "Last synced " + new Date(settings.lastSynced).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-    : "Not synced yet. Click Sync now to write your projects to the doc.", settings.lastSynced ? "ok" : "");
-}
-function scheduleSync() {
-  if (!settings.scriptUrl || !settings.syncKey || settings.autoSync === false) return;
-  clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => syncDoc(), 2500);
-}
-function syncErrorText(e) {
-  switch (e && e.code) {
-    case "bad_key": return "The sync key doesn’t match the one in your script. Check it in Connection settings.";
-    case "no_doc": return "The sync script isn’t linked to a doc yet. In your doc, open Extensions → Apps Script and run setup.";
-    case "network": return "Couldn’t reach the sync script. Check the URL, and that the script is deployed as a web app with access set to Anyone.";
-    default: return "The sync didn’t finish" + (e && e.message ? ": " + e.message : "") + ". Click Sync now to try again.";
-  }
-}
-
-const STATUS_ORDER = ["In progress", "Not started", "On hold", "Done"];
-function buildDoc() {
-  // Each paragraph: { text, style, bullet, bold: [[from, to]], muted }
-  const paras = [];
-  const P = (text, style = "NORMAL_TEXT", extra = {}) => paras.push({ text: (text.replace(/\n/g, " ").trim() || "-"), style, ...extra });
-  const labeled = parts => {
-    let text = "", bold = [];
-    parts.forEach(([label, value], i) => {
-      if (i) text += "    ";
-      bold.push([text.length, text.length + label.length]);
-      text += label + " " + value;
-    });
-    return { text, bold };
-  };
-  const open = projects.filter(p => p.status !== "Done").length;
-  const late = projects.filter(isLate).length;
-  P("ClearDesk Project Log", "HEADING_1");
-  P("Updated automatically from the Project Organizer on " + new Date().toLocaleString(undefined, { month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) + ". Changes made directly in this document are replaced on the next sync.", "NORMAL_TEXT", { muted: true });
-  P(projects.length
-    ? `${projects.length} project${projects.length === 1 ? "" : "s"}: ${open} open, ${projects.length - open} done` + (late ? `, ${late} overdue.` : ".")
-    : "No projects yet.", "NORMAL_TEXT", { space: true });
-  STATUS_ORDER.forEach(status => {
-    const group = projects.filter(p => (p.status || "Not started") === status)
-      .sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999") || (PRI[a.priority] ?? 1) - (PRI[b.priority] ?? 1));
-    if (!group.length) return;
-    P(`${status} (${group.length})`, "HEADING_2");
-    group.forEach(p => {
-      P(p.title || "Untitled project", "HEADING_3");
-      const meta = [];
-      meta.push(["Due:", p.due ? fmtDate(p.due) + (isLate(p) ? " (overdue)" : "") : "No date"]);
-      meta.push(["Priority:", p.priority || "Medium"]);
-      meta.push(["Type:", (p.source || "My project") + (p.assignedBy ? " by " + p.assignedBy : "")]);
-      const m = labeled(meta);
-      P(m.text, "NORMAL_TEXT", { bold: m.bold });
-      (p.description || "").split("\n").map(l => l.trim()).filter(l => l && l !== "•").forEach(l => {
-        if (/^[•\-*–]\s*/.test(l)) P(l.replace(/^[•\-*–]\s*/, ""), "NORMAL_TEXT", { bullet: true });
-        else P(l, "NORMAL_TEXT");
-      });
-      const t = labeled([["Tools:", (p.tools || []).length ? p.tools.join(", ") : "None listed yet"]]);
-      P(t.text, "NORMAL_TEXT", { bold: t.bold, space: true });
-    });
-  });
-  return paras;
-}
-
-async function syncDoc() {
-  if (!settings.scriptUrl || !settings.syncKey) return;
-  if (syncing) { syncAgain = true; return; }
-  clearTimeout(syncTimer);
-  syncing = true; syncAgain = false; lastSyncError = null;
-  $("syncNow").disabled = true;
-  setDocStatus("Syncing to Google Docs…", "");
-  try {
-    let res;
-    try {
-      res = await fetch(settings.scriptUrl, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ key: settings.syncKey, paragraphs: buildDoc() }) });
-    } catch { throw { code: "network" }; }
-    let data;
-    try { data = await res.json(); } catch { throw { code: "network" }; }
-    if (!data.ok) throw { code: data.error, message: data.message };
-    syncing = false;
-    saveSettings({ lastSynced: Date.now(), googleDocTitle: data.title || settings.googleDocTitle,
-      googleDocId: data.docId || settings.googleDocId });
-  } catch (e) {
-    syncing = false;
-    lastSyncError = syncErrorText(e);
-  }
-  renderDocBar();
-  if (syncAgain && !lastSyncError) scheduleSync();
-}
-
-$("syncNow").addEventListener("click", () => { lastSyncError = null; syncDoc(); });
-$("autoSync").addEventListener("change", e => saveSettings({ autoSync: e.target.checked }));
-$("saveConn").addEventListener("click", () => {
-  const url = $("scriptUrl").value.trim();
-  const key = $("syncKey").value.trim();
-  const v = $("docUrlInput").value.trim();
-  const m = v.match(/\/document\/d\/([A-Za-z0-9_-]{20,})/);
-  if (url && !/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)) { setDocStatus("The sync script URL should start with https://script.google.com and end with /exec.", "err"); return; }
-  if (v && !m) { setDocStatus("That doesn’t look like a Google Docs link. Copy it from the doc’s address bar.", "err"); return; }
-  lastSyncError = null;
-  saveSettings({ scriptUrl: url, syncKey: key, ...(m ? { googleDocId: m[1] } : {}) });
-  $("setup").open = false;
-  if (url && key) syncDoc();
-});
-
-/* ---------- Sync script for new users ---------- */
-const SYNC_SCRIPT = `/**
- * Project Organizer: Google Doc sync
- * Paste this into Extensions → Apps Script inside the Google Doc that should
- * receive your projects. No edits are needed.
- */
-
-/** Run this once from the Apps Script editor. It links this doc and shows your sync key in the log. */
-function setup() {
-  const doc = DocumentApp.getActiveDocument();
-  if (!doc) throw new Error('Open Apps Script from your Google Doc (Extensions → Apps Script) and run setup there.');
-  const props = PropertiesService.getScriptProperties();
-  props.setProperty('DOC_ID', doc.getId());
-  const key = Utilities.getUuid();
-  props.setProperty('SYNC_KEY', key);
-  Logger.log('Your sync key: ' + key);
-}
-
-/** Opening the web app URL in a browser shows this, so you can check it's live. */
-function doGet() {
-  return ContentService.createTextOutput('Project Organizer sync is running.');
-}
-
-function doPost(e) {
-  try {
-    const req = JSON.parse(e.postData.contents);
-    const props = PropertiesService.getScriptProperties();
-    const key = props.getProperty('SYNC_KEY');
-    if (!key || req.key !== key) return reply({ ok: false, error: 'bad_key' });
-
-    const docId = props.getProperty('DOC_ID');
-    let doc;
-    try { doc = DocumentApp.openById(docId); } catch (err) { return reply({ ok: false, error: 'no_doc' }); }
-
-    writeDoc(doc.getBody(), req.paragraphs || []);
-    doc.saveAndClose();
-    return reply({ ok: true, title: doc.getName(), docId: docId });
-  } catch (err) {
-    return reply({ ok: false, error: 'script_error', message: String(err.message || err) });
-  }
-}
-
-function writeDoc(body, paras) {
-  const HEADINGS = {
-    HEADING_1: DocumentApp.ParagraphHeading.HEADING1,
-    HEADING_2: DocumentApp.ParagraphHeading.HEADING2,
-    HEADING_3: DocumentApp.ParagraphHeading.HEADING3,
-    NORMAL_TEXT: DocumentApp.ParagraphHeading.NORMAL
-  };
-  body.clear();
-  const first = body.getChild(0); // clear() leaves one empty paragraph
-
-  paras.forEach((p, i) => {
-    const text = String(p.text || '-');
-    let el;
-    if (p.bullet) {
-      el = body.appendListItem(text);
-      el.setGlyphType(DocumentApp.GlyphType.BULLET);
-    } else {
-      el = body.appendParagraph(text);
-      el.setHeading(HEADINGS[p.style] || DocumentApp.ParagraphHeading.NORMAL);
-    }
-
-    const t = el.editAsText();
-    if (p.style === 'NORMAL_TEXT' || p.bullet) {
-      t.setBold(false).setItalic(false);
-      (p.bold || []).forEach(r => {
-        if (r[1] > r[0]) t.setBold(r[0], Math.min(r[1], text.length) - 1, true);
-      });
-      if (p.muted) t.setItalic(true).setForegroundColor('#666666');
-      const next = paras[i + 1];
-      const endOfBlock = p.space || p.muted || (p.bullet && !(next && next.bullet));
-      el.setSpacingAfter(endOfBlock ? 10 : 3);
-    }
-  });
-
-  // Remove the empty paragraph left by clear()
-  if (body.getNumChildren() > 1) first.removeFromParent();
-}
-
-function reply(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
-}
-`;
-$("copyScript").addEventListener("click", async () => {
-  const btn = $("copyScript");
-  let ok = false;
-  try { await navigator.clipboard.writeText(SYNC_SCRIPT); ok = true; } catch {}
-  if (!ok) {
-    const ta = document.createElement("textarea");
-    ta.value = SYNC_SCRIPT; ta.style.position = "fixed"; ta.style.opacity = "0";
-    document.body.appendChild(ta); ta.select();
-    try { ok = document.execCommand("copy"); } catch {}
-    ta.remove();
-  }
-  btn.textContent = ok ? "Copied. Paste it into Apps Script" : "Couldn’t copy. Try again";
-  setTimeout(() => { btn.textContent = "Copy sync script"; }, 4000);
-});
 
 /* ---------- Export / import ---------- */
 $("exportBtn").addEventListener("click", () => {
@@ -863,19 +575,15 @@ $("importFile").addEventListener("change", async e => {
       if (projects.some(x => x.id === item.id)) updated++; else added++;
       upsertLocal(item);
     });
-    saveLocal(); render(); scheduleSync();
+    saveLocal(); render();
     notice(`Imported ${added} new project${added === 1 ? "" : "s"}` + (updated ? ` and updated ${updated}.` : "."));
   } catch { notice("That file isn’t a project export. Choose a .json file made with the Export button."); }
 });
 
 async function init() {
-  try { settings = JSON.parse(localStorage.getItem(LS + "-settings")) || {}; } catch { settings = {}; }
-  $("scriptUrl").value = settings.scriptUrl || "";
-  $("syncKey").value = settings.syncKey || "";
-  if (settings.googleDocId) $("docUrlInput").value = docUrl(settings.googleDocId);
-  if (!settings.scriptUrl) $("setup").open = true;
+  try { localStorage.removeItem(LS + "-settings"); } catch {}
   projects = loadLocal();
-  renderToolChips(); renderSuggestions(); render(); renderDocBar();
+  renderToolChips(); renderSuggestions(); render();
 }
 init();
 </script>
